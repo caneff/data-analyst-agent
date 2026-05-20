@@ -164,8 +164,12 @@ def make_data_analyst_agent(model, checkpointer: Optional[object] = None):
         """Invoke the EDA sub-graph on the cleaned data."""
         logger.info("Running EDA graph")
 
-        # TODO: Invoke eda_graph with the cleaned data and return the response.
-        raise NotImplementedError("Implement run_eda_node")
+        cleaned_data = state.get("data_cleaned")
+        if cleaned_data is None or cleaned_data == {}:
+            return {"eda_response": {}}
+
+        eda_response = eda_graph.invoke({"dataframe_dict": cleaned_data})
+        return {"eda_response": eda_response}
 
     def route_after_cleaning(state: OrchestrationState) -> str:
         """Route to EDA if cleaning succeeded, otherwise end."""
