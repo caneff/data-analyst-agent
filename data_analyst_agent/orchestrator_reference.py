@@ -10,7 +10,7 @@ import pandas as pd
 from langgraph.graph import END, StateGraph
 
 from data_cleaning_agent import make_lightweight_data_cleaning_agent
-from eda_workflow.eda_workflow import make_eda_baseline_workflow
+from eda_workflow.workflow import make_eda_baseline_workflow
 
 from data_analyst_agent.guardrails import check_pii_columns
 
@@ -212,4 +212,3 @@ def make_data_analyst_agent(model, checkpointer: Optional[object] = None):
     workflow.add_edge("run_eda", END)
 
     return workflow.compile(checkpointer=checkpointer, name=AGENT_NAME)
-
