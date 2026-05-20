@@ -1,13 +1,13 @@
 import logging
 import warnings
 
-warnings.filterwarnings("ignore", category=FutureWarning)
-logging.basicConfig(level=logging.INFO)
-
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 
 from data_analyst_agent import DataAnalystAgent
+
+warnings.filterwarnings("ignore", category=FutureWarning)
+logging.basicConfig(level=logging.INFO)
 
 
 if __name__ == "__main__":

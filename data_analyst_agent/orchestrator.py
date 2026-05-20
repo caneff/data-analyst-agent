@@ -1,10 +1,13 @@
 """Orchestrator that chains data-cleaning and EDA sub-graphs."""
 
 import logging
-from typing import Optional, TypedDict
+from typing import Any, Optional, TypedDict
 
 import pandas as pd
+from langchain_core.language_models.chat_models import BaseChatModel
 from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
+from langgraph.types import Checkpointer
 
 from data_cleaning_agent import make_lightweight_data_cleaning_agent
 from eda_workflow.workflow import make_eda_baseline_workflow
@@ -13,6 +16,19 @@ from data_analyst_agent.guardrails import check_pii_columns
 
 logger = logging.getLogger(__name__)
 AGENT_NAME = "data_analyst_agent"
+
+
+class OrchestrationState(TypedDict):
+    """Shared state that flows through every node in the parent graph."""
+
+    data_raw: dict[str, Any]
+    user_instructions: Optional[str]
+    max_retries: int
+    retry_count: int
+    pii_flagged_columns: list[str]
+    data_cleaned: Optional[dict[str, Any]]
+    cleaning_response: dict[str, Any]
+    eda_response: dict[str, Any]
 
 
 class DataAnalystAgent:
@@ -34,7 +50,16 @@ class DataAnalystAgent:
         Raw output from the last ``invoke_workflow`` call.
     """
 
-    def __init__(self, model, checkpointer: Optional[object] = None) -> None:
+    model: BaseChatModel
+    checkpointer: Checkpointer
+    response: dict[str, Any] | None
+    _compiled_graph: CompiledStateGraph
+
+    def __init__(
+        self,
+        model: BaseChatModel,
+        checkpointer: Checkpointer = None,
+    ) -> None:
         self.model = model
         self.checkpointer = checkpointer
         self.response = None
@@ -49,7 +74,7 @@ class DataAnalystAgent:
         user_instructions: Optional[str] = None,
         max_retries: int = 3,
         retry_count: int = 0,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """Read a CSV and run the full cleaning-then-EDA pipeline."""
         df = pd.read_csv(filepath)
@@ -83,13 +108,13 @@ class DataAnalystAgent:
             return self.response.get("eda_response", {}).get("summary")
         return None
 
-    def get_eda_recommendations(self) -> Optional[list]:
+    def get_eda_recommendations(self) -> Optional[list[str]]:
         """Return the list of EDA recommendations, or ``None`` if unavailable."""
         if self.response:
             return self.response.get("eda_response", {}).get("recommendations")
         return None
 
-    def get_eda_results(self) -> Optional[dict]:
+    def get_eda_results(self) -> Optional[dict[str, Any]]:
         """Return the raw EDA results dict, or ``None`` if unavailable."""
         if self.response:
             return self.response.get("eda_response", {}).get("results")
@@ -102,7 +127,10 @@ class DataAnalystAgent:
         return []
 
 
-def make_data_analyst_agent(model, checkpointer: Optional[object] = None):
+def make_data_analyst_agent(
+    model: BaseChatModel,
+    checkpointer: Checkpointer = None,
+) -> CompiledStateGraph:
     """Build a parent graph that orchestrates existing cleaning and EDA graphs."""
 
     # Compile each sub-graph once so they can be invoked as nodes.
@@ -115,18 +143,7 @@ def make_data_analyst_agent(model, checkpointer: Optional[object] = None):
         checkpointer=checkpointer,
     )
 
-    # Shared state that flows through every node in the parent graph.
-    class OrchestrationState(TypedDict):
-        data_raw: dict
-        user_instructions: Optional[str]
-        max_retries: int
-        retry_count: int
-        pii_flagged_columns: list
-        data_cleaned: Optional[dict]
-        cleaning_response: dict
-        eda_response: dict
-
-    def pii_check_node(state: OrchestrationState) -> dict:
+    def pii_check_node(state: OrchestrationState) -> dict[str, list[str]]:
         """Flag columns that look like PII before any LLM call."""
         logger.info("Running PII guardrail")
         columns = list(state.get("data_raw", {}).keys())
@@ -135,13 +152,15 @@ def make_data_analyst_agent(model, checkpointer: Optional[object] = None):
             logger.warning("PII guardrail flagged columns: %s", flagged)
         return {"pii_flagged_columns": flagged}
 
-    def route_after_pii_check(state: OrchestrationState) -> str:
+    def route_after_pii_check(
+        state: OrchestrationState,
+    ) -> str:
         """Block the pipeline if PII columns were detected."""
         if state.get("pii_flagged_columns"):
             return "end"
         return "clean_data"
 
-    def clean_data_node(state: OrchestrationState) -> dict:
+    def clean_data_node(state: OrchestrationState) -> dict[str, Any]:
         """Invoke the cleaning sub-graph and return cleaned data."""
         logger.info("Running cleaning graph")
 
@@ -149,7 +168,7 @@ def make_data_analyst_agent(model, checkpointer: Optional[object] = None):
         cleaning_response = cleaning_graph.invoke(
             {
                 "user_instructions": state.get("user_instructions"),
-                "data_raw": state.get("data_raw", {}),
+                "source_df": state.get("data_raw", {}),
                 "max_retries": state.get("max_retries", 3),
                 "retry_count": state.get("retry_count", 0),
             }
@@ -160,7 +179,7 @@ def make_data_analyst_agent(model, checkpointer: Optional[object] = None):
             "cleaning_response": cleaning_response,
         }
 
-    def run_eda_node(state: OrchestrationState) -> dict:
+    def run_eda_node(state: OrchestrationState) -> dict[str, dict[str, Any]]:
         """Invoke the EDA sub-graph on the cleaned data."""
         logger.info("Running EDA graph")
 
@@ -171,14 +190,43 @@ def make_data_analyst_agent(model, checkpointer: Optional[object] = None):
         eda_response = eda_graph.invoke({"dataframe_dict": cleaned_data})
         return {"eda_response": eda_response}
 
-    def route_after_cleaning(state: OrchestrationState) -> str:
+    def route_after_cleaning(
+        state: OrchestrationState,
+    ) -> str:
         """Route to EDA if cleaning succeeded, otherwise end."""
-        # TODO: Return "run_eda" or "end" based on the cleaning result.
-        raise NotImplementedError("Implement route_after_cleaning")
+        cleaning_response = state.get("cleaning_response", {})
+        cleaned_data = state.get("data_cleaned")
+        has_cleaning_error = (
+            cleaning_response.get("cleaning_plan_error") is not None
+            or cleaning_response.get("data_cleaner_error") is not None
+        )
+        if has_cleaning_error or cleaned_data is None or cleaned_data == {}:
+            return "end"
+        return "run_eda"
 
-    # TODO: Assemble the graph — add nodes, set entry point, and wire edges.
     workflow = StateGraph(OrchestrationState)
 
-    raise NotImplementedError("Assemble the graph")
+    workflow.add_node("pii_check", pii_check_node)
+    workflow.add_node("clean_data", clean_data_node)
+    workflow.add_node("run_eda", run_eda_node)
+
+    workflow.set_entry_point("pii_check")
+    workflow.add_conditional_edges(
+        "pii_check",
+        route_after_pii_check,
+        {
+            "clean_data": "clean_data",
+            "end": END,
+        },
+    )
+    workflow.add_conditional_edges(
+        "clean_data",
+        route_after_cleaning,
+        {
+            "run_eda": "run_eda",
+            "end": END,
+        },
+    )
+    workflow.add_edge("run_eda", END)
 
     return workflow.compile(checkpointer=checkpointer, name=AGENT_NAME)

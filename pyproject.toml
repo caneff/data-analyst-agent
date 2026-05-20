@@ -19,7 +19,9 @@ name = "Andres Vourakis"
 
 [dependency-groups]
 dev = [
+    "pyright>=1.1.409",
     "pytest>=8.0.0",
+    "ruff>=0.15.13",
 ]
 
 [tool.pytest.ini_options]
