@@ -56,8 +56,7 @@ data-analyst-agent/
 ├── data_analyst_agent/
 │   ├── __init__.py
 │   ├── guardrails.py
-│   ├── orchestrator.py
-│   └── orchestrator_reference.py
+│   └── orchestrator.py
 ├── tests/
 │   └── test_guardrails.py
 ├── .env.example
@@ -68,7 +67,6 @@ data-analyst-agent/
 ```
 
 - **`orchestrator.py`** — Student version with TODOs to complete.
-- **`orchestrator_reference.py`** — Complete solution for reference.
 - **`guardrails.py`** — PII column detection guardrail.
 
 ## Graph visualization
