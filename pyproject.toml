@@ -10,7 +10,7 @@ dependencies = [
     "langchain>=0.3.0",
     "langchain-openai>=0.2.0",
     "langgraph>=0.2.0",
-    "pandas>=2.3.0,<2.4",
+    "pandas>=2.3.0,<=2.3.3",
     "python-dotenv>=1.0.0",
 ]
 
@@ -30,7 +30,7 @@ pythonpath = ["."]
 [tool.uv]
 package = false
 override-dependencies = [
-    "pandas>=2.3.0,<2.4",
+    "pandas>=2.3.0,<=2.3.3",
 ]
 
 [tool.uv.sources]

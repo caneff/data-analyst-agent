@@ -1,9 +1,14 @@
 version = 1
 revision = 3
 requires-python = ">=3.14"
+resolution-markers = [
+    "sys_platform == 'win32'",
+    "sys_platform == 'emscripten'",
+    "sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
 
 [manifest]
-overrides = [{ name = "pandas", specifier = ">=2.3.0,<2.4" }]
+overrides = [{ name = "pandas", specifier = ">=2.3.0,<=2.3.3" }]
 
 [[package]]
 name = "altair"
@@ -168,7 +173,7 @@ requires-dist = [
     { name = "langchain", specifier = ">=0.3.0" },
     { name = "langchain-openai", specifier = ">=0.2.0" },
     { name = "langgraph", specifier = ">=0.2.0" },
-    { name = "pandas", specifier = ">=2.3.0,<2.4" },
+    { name = "pandas", specifier = ">=2.3.0,<=2.3.3" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
 ]
 
@@ -202,7 +207,7 @@ requires-dist = [
     { name = "langchain-openai", specifier = ">=0.1.0" },
     { name = "langgraph", specifier = ">=0.2.0" },
     { name = "numpy", specifier = ">=1.24.0" },
-    { name = "pandas", specifier = ">=2.0.0" },
+    { name = "pandas", specifier = ">=2.3.0,<=2.3.3" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "streamlit", specifier = ">=1.51.0" },
     { name = "typing-extensions", specifier = ">=4.0.0" },
@@ -258,7 +263,7 @@ requires-dist = [
     { name = "langchain", specifier = ">=0.3.0" },
     { name = "langchain-openai", specifier = ">=0.1.0" },
     { name = "langgraph", specifier = ">=0.2.0" },
-    { name = "pandas", specifier = ">=3.0.0" },
+    { name = "pandas", specifier = ">=2.3.0,<=2.3.3" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
 ]
 
